@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUMS - ID Comparison Tool</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: #2d2d2d;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      border-left: 3px solid #667eea;
+      background: #333;
+    }
+    .title {
+      color: #667eea;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .success { color: #00ff00; }
+    .error { color: #ff6b6b; }
+    .warning { color: #ffd43b; }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px 5px 10px 0;
+    }
+    input {
+      padding: 8px;
+      margin: 5px;
+      width: 300px;
+      background: #444;
+      color: #fff;
+      border: 1px solid #667eea;
+    }
+    pre {
+      background: #1e1e1e;
+      padding: 10px;
+      overflow-x: auto;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 ID Comparison Tool</h1>
+    <p>This will show you EXACTLY why login is failing</p>
+
+    <div class="section">
+      <div class="title">Step 1: Enter Credentials</div>
+      <input type="email" id="email" placeholder="teacher@krmu.edu.in" />
+      <input type="password" id="password" placeholder="your password" />
+      <button onclick="loginAndCompare()">Login & Compare IDs</button>
+    </div>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    function addOutput(title, content, type = "normal") {
+      const output = document.getElementById("output");
+      const section = document.createElement("div");
+      section.className = "section";
+
+      let html = `<div class="title">${title}</div>`;
+
+      if (typeof content === "object") {
+        html += `<pre>${JSON.stringify(content, null, 2)}</pre>`;
+      } else {
+        const className = type === "success" ? "success" : type === "error" ? "error" : type === "warning" ? "warning" : "normal";
+        html += `<div class="${className}">${content}</div>`;
+      }
+
+      section.innerHTML = html;
+      output.appendChild(section);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function loginAndCompare() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      if (!email || !password) {
+        alert("Please enter email and password");
+        return;
+      }
+
+      document.getElementById("output").innerHTML = "";
+
+      try {
+        // Step 1: Login
+        addOutput("🔐 Step 1: Logging in...", `Email: ${email}`, "warning");
+
+        const { data: authData, error: authError } = await client.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (authError) {
+          addOutput("❌ Login Failed", authError, "error");
+          return;
+        }
+
+        addOutput("✅ Login Successful", authData.user, "success");
+
+        const authUserId = authData.user.id;
+        addOutput("📌 Auth User ID", authUserId, "success");
+
+        // Step 2: Get all profiles
+        addOutput("📊 Step 2: Fetching all profiles...", "Querying profiles table...", "warning");
+
+        const { data: allProfiles, error: profileError } = await client
+          .from("profiles")
+          .select("id, email, full_name, role");
+
+        if (profileError) {
+          addOutput("❌ Profile Query Failed", profileError, "error");
+          return;
+        }
+
+        addOutput("✅ Profiles Retrieved", allProfiles, "success");
+
+        // Step 3: Compare
+        addOutput("🔍 Step 3: Comparing IDs...", "", "warning");
+
+        const matchingProfile = allProfiles.find((p) => p.id === authUserId);
+
+        if (matchingProfile) {
+          addOutput("✅ MATCH FOUND!", matchingProfile, "success");
+          addOutput("🎯 SOLUTION", "Now try logging in again. It should work!", "success");
+        } else {
+          addOutput("❌ NO MATCH FOUND!", "Auth user ID is NOT in profiles table", "error");
+
+          addOutput(
+            "🔴 PROBLEM",
+            `Auth ID: ${authUserId}\n\nProfiles in table:\n${allProfiles
+              .map((p) => `- ID: ${p.id}\n  Email: ${p.email}`)
+              .join("\n")}`,
+            "error"
+          );
+
+          addOutput(
+            "💡 LIKELY CAUSE",
+            "Registration failed silently. The auth account was created but the profile wasn't saved.",
+            "warning"
+          );
+
+          addOutput(
+            "✅ FIX",
+            "Re-register with a NEW email address.\n\nOr manually insert the profile row with the correct ID.",
+            "warning"
+          );
+        }
+      } catch (err) {
+        addOutput("❌ Unexpected Error", err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>
