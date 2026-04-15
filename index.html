@@ -1,106 +1,143 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SUMS - Login</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
-</head>
-<body>
-  <div class="container">
-    <h1>🎓 SUMS</h1>
-    <h2>Smart University Management System</h2>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SUMS - Login</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎓 SUMS</h1>
+      <h2>Smart University Management System</h2>
 
-    <form id="loginForm">
-      <label for="email">Email ID:</label>
-      <input type="email" id="email" required />
+      <form id="loginForm">
+        <label for="email">Email ID:</label>
+        <input type="email" id="email" required />
 
-      <label for="password">Password:</label>
-      <input type="password" id="password" required />
+        <label for="password">Password:</label>
+        <input type="password" id="password" required />
 
-      <label>Login As:</label>
-      <div class="role-group">
-        <label class="role-option">
-          <input type="radio" name="role" value="student" required />
-          Student
-        </label>
-        <label class="role-option">
-          <input type="radio" name="role" value="teacher" required />
-          Teacher
-        </label>
+        <label>Login As:</label>
+        <div class="role-group">
+          <label class="role-option">
+            <input type="radio" name="role" value="student" required />
+            Student
+          </label>
+          <label class="role-option">
+            <input type="radio" name="role" value="teacher" required />
+            Teacher
+          </label>
+        </div>
+
+        <input type="submit" value="Login" />
+      </form>
+
+      <div class="links">
+        <p>Don't have an account?</p>
+        <a href="form.html">Register as Student</a> |
+        <a href="teacher_form.html">Register as Teacher</a>
       </div>
-
-      <input type="submit" value="Login" />
-    </form>
-
-    <div class="links">
-      <p>Don't have an account?</p>
-      <a href="form.html">Register as Student</a> |
-      <a href="teacher_form.html">Register as Teacher</a>
     </div>
-  </div>
 
-  <script>
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
+    <script>
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
 
-      try {
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
-        const selectedRole = document.querySelector('input[name="role"]:checked').value;
+          try {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            const selectedRole = document.querySelector(
+              'input[name="role"]:checked',
+            ).value;
 
-        console.log("🔐 Login attempt:", { email, selectedRole });
+            console.log("🔐 Login attempt:", { email, selectedRole });
 
-        // Step 1: Sign in
-        const { data, error } = await client.auth.signInWithPassword({
-          email,
-          password,
+            // Step 1: Sign in
+            const { data, error } = await client.auth.signInWithPassword({
+              email,
+              password,
+            });
+
+            if (error) {
+              console.error("❌ Auth Error:", error);
+              alert("Login failed: Check your email/password");
+              return;
+            }
+
+            console.log("✅ Auth success, user ID:", data.user.id);
+
+            // Step 2: Fetch profile with detailed logging
+            console.log("🔍 Fetching profile for user ID:", data.user.id);
+
+            const { data: profile, error: profileError } = await client
+              .from("profiles")
+              .select("*")
+              .eq("id", data.user.id)
+              .maybeSingle();
+
+            console.log("Profile fetch result:", { profile, profileError });
+
+            if (profileError) {
+              console.error("❌ Profile Query Error:", profileError);
+              console.error("Error message:", profileError.message);
+              console.error("Error code:", profileError.code);
+              alert(
+                "Error fetching profile: " +
+                  profileError.message +
+                  "\n\nCheck console (F12)",
+              );
+              return;
+            }
+
+            if (!profile) {
+              console.error("❌ Profile not found for user ID:", data.user.id);
+              console.warn("⚠️ Possible causes:");
+              console.warn("1. Profile wasn't saved during registration");
+              console.warn("2. RLS policy is blocking SELECT access");
+              console.warn("3. User ID mismatch between auth and profile");
+              console.warn("4. Check Supabase table for email:", email);
+              alert(
+                "Profile not found!\n\nPossible causes:\n1. Registration incomplete\n2. RLS policy issue\n3. Try registering again\n\nCheck console (F12) for details",
+              );
+              return;
+            }
+
+            console.log("✅ Profile found:", profile);
+            console.log("Profile role:", profile.role);
+
+            // Step 3: Verify role
+            if (profile.role !== selectedRole) {
+              console.warn("Role mismatch:", {
+                profileRole: profile.role,
+                selectedRole: selectedRole,
+              });
+              alert(
+                `Role mismatch! You are registered as ${profile.role}, but tried to login as ${selectedRole}.`,
+              );
+              return;
+            }
+
+            console.log("✅ Role verified");
+
+            // Step 4: Redirect
+            if (profile.role === "student") {
+              console.log("→ Redirecting to Students.html");
+              window.location.href = "Students.html";
+            } else if (profile.role === "teacher") {
+              console.log("→ Redirecting to teacher.html");
+              window.location.href = "teacher.html";
+            }
+          } catch (err) {
+            console.error("❌ Unexpected login error:", err);
+            console.error("Error message:", err.message);
+            alert("Error: " + err.message);
+          }
         });
-
-        if (error) {
-          console.error("❌ Auth Error:", error);
-          alert("Login failed: Check your email/password");
-          return;
-        }
-
-        console.log("✅ Auth success, user ID:", data.user.id);
-
-        // Step 2: Fetch profile
-        const { data: profile, error: profileError } = await client
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .maybeSingle();
-
-        if (!profile) {
-          console.error("❌ Profile not found");
-          alert("Profile not found! Please register first.");
-          return;
-        }
-
-        console.log("✅ Profile found:", profile.role);
-
-        // Step 3: Verify role
-        if (profile.role !== selectedRole) {
-          alert(`Role mismatch! You are registered as ${profile.role}.`);
-          return;
-        }
-
-        console.log("✅ Role verified");
-
-        // Step 4: Redirect
-        if (profile.role === "student") {
-          window.location.href = "Students.html";
-        } else if (profile.role === "teacher") {
-          window.location.href = "teacher.html";
-        }
-      } catch (err) {
-        console.error("❌ Unexpected error:", err);
-        alert("Error: " + err.message);
-      }
-    });
-  </script>
-</body>
+    </script>
+  </body>
 </html>
