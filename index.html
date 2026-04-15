@@ -57,95 +57,72 @@
 
             console.log("🔐 Login attempt:", { email, selectedRole });
 
-            // STEP 1: Sign in with email/password
-            console.log("📝 Signing in...");
-            const { data: authData, error: authError } =
-              await client.auth.signInWithPassword({
-                email,
-                password,
-              });
+            // STEP 1: Sign in
+            console.log("📝 Signing in with email/password...");
+            const { data, error } = await client.auth.signInWithPassword({
+              email,
+              password,
+            });
 
-            if (authError) {
-              console.error("❌ Auth Error:", authError);
-              alert("Login failed: " + authError.message);
+            if (error) {
+              console.error("❌ Auth Error:", error);
+              alert("Login failed: " + error.message);
               return;
             }
 
             console.log("✅ Auth successful");
 
-            // STEP 2: WAIT LONGER for session to be fully established
-            console.log("⏳ Waiting 3 seconds for session to initialize...");
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-
-            // STEP 3: Get fresh user data from session
-            console.log("🔍 Fetching current user from session...");
-            const { data: userData, error: userError } =
-              await client.auth.getUser();
-
-            if (userError) {
-              console.error("❌ Get User Error:", userError);
-              alert("Session error: " + userError.message);
+            // STEP 2: Extract user ID from auth response (DON'T call getUser())
+            if (!data.user || !data.user.id) {
+              console.error("❌ No user in auth response");
+              alert("Auth failed: No user data");
               return;
             }
 
-            if (!userData.user) {
-              console.error("❌ No user in session");
-              alert("Session lost. Please try again.");
-              return;
-            }
+            const userId = data.user.id;
+            console.log("✅ User ID:", userId);
 
-            const userId = userData.user.id;
-            console.log("✅ Current user ID:", userId);
+            // STEP 3: Wait a moment for profile to be accessible
+            console.log("⏳ Waiting 2 seconds before profile query...");
+            await new Promise((resolve) => setTimeout(resolve, 2000));
 
-            // STEP 4: Query profile with explicit error handling
-            console.log("🔎 Querying profiles table...");
+            // STEP 4: Query profile using the user ID from auth response
+            console.log("🔎 Querying profile for user ID:", userId);
             const { data: profile, error: queryError } = await client
               .from("profiles")
               .select("*")
               .eq("id", userId)
               .maybeSingle();
 
-            // Log all details
             console.log("Query result:", { profile, queryError });
 
             if (queryError) {
-              console.error("❌ Query Error Details:", {
-                message: queryError.message,
-                code: queryError.code,
-                status: queryError.status,
-              });
+              console.error("❌ Query Error:", queryError);
               alert("Error fetching profile: " + queryError.message);
               return;
             }
 
             if (!profile) {
-              console.error(
-                "❌ Profile not found in database for user:",
-                userId,
-              );
+              console.error("❌ Profile not found for user:", userId);
               alert("Profile not found! Please register first.");
               return;
             }
 
-            console.log(
-              "✅ Profile found:",
-              profile.full_name,
-              "Role:",
-              profile.role,
-            );
+            console.log("✅ Profile found:", profile.full_name);
+            console.log("Profile role:", profile.role);
 
-            // STEP 5: Verify role matches
+            // STEP 5: Verify role
             if (profile.role !== selectedRole) {
               console.warn("⚠️ Role mismatch");
               alert(
-                `Role mismatch! You registered as ${profile.role}, not ${selectedRole}`,
+                `You are registered as ${profile.role}, not ${selectedRole}`,
               );
               return;
             }
 
             console.log("✅ Role verified");
 
-            // STEP 6: Redirect to dashboard
+            // STEP 6: Redirect
             console.log("🚀 Redirecting to dashboard...");
             if (profile.role === "student") {
               window.location.href = "Students.html";
