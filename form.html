@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Registration - SUMS</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>📚 Student Registration</h1>
+
+    <form id="studentRegForm">
+      <label for="fullName">Full Name:</label>
+      <input type="text" id="fullName" required />
+
+      <label for="rollNumber">Roll Number:</label>
+      <input type="text" id="rollNumber" required />
+
+      <label for="email">Email ID:</label>
+      <input type="email" id="email" required />
+
+      <label for="password">Password:</label>
+      <input type="password" id="password" minlength="7" required />
+
+      <label for="courseName">Course Name:</label>
+      <input type="text" id="courseName" placeholder="e.g., B.Tech CSE" required />
+
+      <label for="sectionId">Section ID:</label>
+      <select id="sectionId" required>
+        <option value="">-- Select Section --</option>
+        <option value="1">CSE-A (Semester 6)</option>
+        <option value="2">CSE-B (Semester 4)</option>
+      </select>
+
+      <input type="submit" value="Register as Student" />
+    </form>
+
+    <div class="links">
+      <p>Already have an account? <a href="index.html">Login here</a></p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("studentRegForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      try {
+        const fullName = document.getElementById("fullName").value;
+        const rollNumber = document.getElementById("rollNumber").value;
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const courseName = document.getElementById("courseName").value;
+        const sectionId = document.getElementById("sectionId").value;
+
+        console.log("🚀 Student registration submitted");
+
+        // Step 1: Sign up
+        const { data, error } = await client.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error("❌ Auth Error:", error);
+          alert("Registration failed: " + error.message);
+          return;
+        }
+
+        console.log("✅ Auth account created");
+
+        if (!data.user || !data.user.id) {
+          alert("User not properly created");
+          return;
+        }
+
+        // Step 2: Wait for auth to commit
+        console.log("⏳ Waiting 1.5 seconds...");
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        // Step 3: Insert profile
+        const { error: profileError } = await client.from("profiles").insert([
+          {
+            id: data.user.id,
+            email,
+            full_name: fullName,
+            role: "student",
+            roll_number: rollNumber,
+            course_name: courseName,
+            section_id: parseInt(sectionId),
+          },
+        ]);
+
+        if (profileError) {
+          console.error("❌ Profile Insert Error:", profileError);
+          alert("Profile save failed: " + profileError.message);
+          return;
+        }
+
+        console.log("✅ Student profile created successfully");
+        alert("✅ Registration successful! Redirecting to login...");
+
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 2000);
+      } catch (err) {
+        console.error("❌ Unexpected error:", err);
+        alert("Error: " + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
