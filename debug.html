@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUMS - Diagnostic Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    .debug-container {
+      max-width: 900px;
+      font-family: monospace;
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .debug-section {
+      margin: 20px 0;
+      padding: 15px;
+      border-left: 3px solid #667eea;
+      background: #2d2d2d;
+    }
+    .debug-title {
+      color: #667eea;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .debug-item {
+      margin: 5px 0;
+      word-break: break-all;
+    }
+    .success {
+      color: #00ff00;
+    }
+    .error {
+      color: #ff6b6b;
+    }
+    .warning {
+      color: #ffd43b;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px 5px 10px 0;
+    }
+    button:hover {
+      background: #764ba2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" style="max-width: 1000px">
+    <h1>🔧 SUMS Diagnostic Tool</h1>
+    <p style="text-align: center; color: #999">Find the exact issue causing login problems</p>
+
+    <button onclick="checkAuth()">Step 1: Check Auth Status</button>
+    <button onclick="checkProfiles()">Step 2: Check Profiles Table</button>
+    <button onclick="checkQuery()">Step 3: Run Login Query</button>
+    <button onclick="clearDebug()">Clear Output</button>
+
+    <div id="debugOutput" class="debug-container" style="min-height: 300px; margin-top: 20px">
+      <p style="color: #999">Click buttons above to run diagnostics...</p>
+    </div>
+  </div>
+
+  <script>
+    let authUser = null;
+
+    function log(title, data, type = "normal") {
+      const output = document.getElementById("debugOutput");
+      const section = document.createElement("div");
+      section.className = "debug-section";
+
+      let content = `<div class="debug-title">${title}</div>`;
+
+      if (typeof data === "object") {
+        content += `<pre style="margin: 0">${JSON.stringify(data, null, 2)}</pre>`;
+      } else {
+        const className = type === "success" ? "success" : type === "error" ? "error" : type === "warning" ? "warning" : "normal";
+        content += `<div class="debug-item ${className}">${data}</div>`;
+      }
+
+      section.innerHTML = content;
+      output.appendChild(section);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearDebug() {
+      document.getElementById("debugOutput").innerHTML =
+        '<p style="color: #999">Output cleared. Click buttons to run diagnostics...</p>';
+    }
+
+    // Step 1: Check Auth
+    async function checkAuth() {
+      log("🔍 Checking Auth Status...", "Fetching current user from Supabase Auth...", "warning");
+
+      try {
+        const { data, error } = await client.auth.getUser();
+
+        if (error) {
+          log("❌ Auth Error", error, "error");
+          return;
+        }
+
+        if (!data.user) {
+          log("⚠️ Not Logged In", "No user currently logged in. Please login first.", "warning");
+          return;
+        }
+
+        authUser = data.user;
+        log("✅ Auth User Found", authUser, "success");
+        log("📋 User Details", {
+          id: authUser.id,
+          email: authUser.email,
+          email_confirmed: authUser.email_confirmed_at,
+          created_at: authUser.created_at,
+        });
+      } catch (err) {
+        log("❌ Exception", err.message, "error");
+      }
+    }
+
+    // Step 2: Check Profiles Table
+    async function checkProfiles() {
+      log("🔍 Checking Profiles Table...", "Fetching all profiles...", "warning");
+
+      try {
+        const { data, error } = await client.from("profiles").select("*");
+
+        if (error) {
+          log("❌ Query Error", error, "error");
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          log("⚠️ No Profiles", "Profiles table is empty!", "warning");
+          return;
+        }
+
+        log("✅ Found Profiles", `Total: ${data.length}`, "success");
+
+        data.forEach((profile, index) => {
+          log(`Profile ${index + 1}`, {
+            id: profile.id,
+            email: profile.email,
+            full_name: profile.full_name,
+            role: profile.role,
+            created_at: profile.created_at,
+          });
+        });
+
+        // Check for matches
+        if (authUser) {
+          const matching = data.find((p) => p.id === authUser.id);
+          if (matching) {
+            log("✅ Match Found!", `Profile ID matches Auth User ID`, "success");
+          } else {
+            log("❌ No Match", `Auth ID: ${authUser.id} not found in profiles`, "error");
+            log("💡 Possible Issue", "User ID mismatch between auth and profiles table", "warning");
+          }
+        }
+      } catch (err) {
+        log("❌ Exception", err.message, "error");
+      }
+    }
+
+    // Step 3: Run Login Query
+    async function checkQuery() {
+      if (!authUser) {
+        log("⚠️ First Login Required", "Please login first, then run Step 1 and Step 2, then try this step", "warning");
+        return;
+      }
+
+      log("🔍 Running Login Query...", `Querying for user ID: ${authUser.id}`, "warning");
+
+      try {
+        const { data, error } = await client
+          .from("profiles")
+          .select("*")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        log("Query Response", { data, error });
+
+        if (error) {
+          log("❌ Query Error", error, "error");
+          return;
+        }
+
+        if (!data) {
+          log("❌ No Data", "Query returned null/empty", "error");
+          log("💡 Diagnosis", "Profile not found for this user ID", "warning");
+          return;
+        }
+
+        log("✅ Query Successful!", data, "success");
+        log("✅ Profile Found!", `Role: ${data.role}`, "success");
+      } catch (err) {
+        log("❌ Exception", err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>
