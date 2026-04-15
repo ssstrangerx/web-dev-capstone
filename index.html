@@ -57,84 +57,103 @@
 
             console.log("🔐 Login attempt:", { email, selectedRole });
 
-            // Step 1: Sign in
-            const { data, error } = await client.auth.signInWithPassword({
-              email,
-              password,
-            });
+            // STEP 1: Sign in with email/password
+            console.log("📝 Signing in...");
+            const { data: authData, error: authError } =
+              await client.auth.signInWithPassword({
+                email,
+                password,
+              });
 
-            if (error) {
-              console.error("❌ Auth Error:", error);
-              alert("Login failed: Check your email/password");
+            if (authError) {
+              console.error("❌ Auth Error:", authError);
+              alert("Login failed: " + authError.message);
               return;
             }
 
-            console.log("✅ Auth success, user ID:", data.user.id);
+            console.log("✅ Auth successful");
 
-            // Step 2: Fetch profile with detailed logging
-            console.log("🔍 Fetching profile for user ID:", data.user.id);
+            // STEP 2: WAIT LONGER for session to be fully established
+            console.log("⏳ Waiting 3 seconds for session to initialize...");
+            await new Promise((resolve) => setTimeout(resolve, 3000));
 
-            const { data: profile, error: profileError } = await client
+            // STEP 3: Get fresh user data from session
+            console.log("🔍 Fetching current user from session...");
+            const { data: userData, error: userError } =
+              await client.auth.getUser();
+
+            if (userError) {
+              console.error("❌ Get User Error:", userError);
+              alert("Session error: " + userError.message);
+              return;
+            }
+
+            if (!userData.user) {
+              console.error("❌ No user in session");
+              alert("Session lost. Please try again.");
+              return;
+            }
+
+            const userId = userData.user.id;
+            console.log("✅ Current user ID:", userId);
+
+            // STEP 4: Query profile with explicit error handling
+            console.log("🔎 Querying profiles table...");
+            const { data: profile, error: queryError } = await client
               .from("profiles")
               .select("*")
-              .eq("id", data.user.id)
+              .eq("id", userId)
               .maybeSingle();
 
-            console.log("Profile fetch result:", { profile, profileError });
+            // Log all details
+            console.log("Query result:", { profile, queryError });
 
-            if (profileError) {
-              console.error("❌ Profile Query Error:", profileError);
-              console.error("Error message:", profileError.message);
-              console.error("Error code:", profileError.code);
-              alert(
-                "Error fetching profile: " +
-                  profileError.message +
-                  "\n\nCheck console (F12)",
-              );
+            if (queryError) {
+              console.error("❌ Query Error Details:", {
+                message: queryError.message,
+                code: queryError.code,
+                status: queryError.status,
+              });
+              alert("Error fetching profile: " + queryError.message);
               return;
             }
 
             if (!profile) {
-              console.error("❌ Profile not found for user ID:", data.user.id);
-              console.warn("⚠️ Possible causes:");
-              console.warn("1. Profile wasn't saved during registration");
-              console.warn("2. RLS policy is blocking SELECT access");
-              console.warn("3. User ID mismatch between auth and profile");
-              console.warn("4. Check Supabase table for email:", email);
-              alert(
-                "Profile not found!\n\nPossible causes:\n1. Registration incomplete\n2. RLS policy issue\n3. Try registering again\n\nCheck console (F12) for details",
+              console.error(
+                "❌ Profile not found in database for user:",
+                userId,
               );
+              alert("Profile not found! Please register first.");
               return;
             }
 
-            console.log("✅ Profile found:", profile);
-            console.log("Profile role:", profile.role);
+            console.log(
+              "✅ Profile found:",
+              profile.full_name,
+              "Role:",
+              profile.role,
+            );
 
-            // Step 3: Verify role
+            // STEP 5: Verify role matches
             if (profile.role !== selectedRole) {
-              console.warn("Role mismatch:", {
-                profileRole: profile.role,
-                selectedRole: selectedRole,
-              });
+              console.warn("⚠️ Role mismatch");
               alert(
-                `Role mismatch! You are registered as ${profile.role}, but tried to login as ${selectedRole}.`,
+                `Role mismatch! You registered as ${profile.role}, not ${selectedRole}`,
               );
               return;
             }
 
             console.log("✅ Role verified");
 
-            // Step 4: Redirect
+            // STEP 6: Redirect to dashboard
+            console.log("🚀 Redirecting to dashboard...");
             if (profile.role === "student") {
-              console.log("→ Redirecting to Students.html");
               window.location.href = "Students.html";
             } else if (profile.role === "teacher") {
-              console.log("→ Redirecting to teacher.html");
               window.location.href = "teacher.html";
             }
           } catch (err) {
-            console.error("❌ Unexpected login error:", err);
-            console.error("Error message:", err.message);
+            console.error("❌ Unexpected error:", err);
             alert("Error: " + err.message);
           }
         });
